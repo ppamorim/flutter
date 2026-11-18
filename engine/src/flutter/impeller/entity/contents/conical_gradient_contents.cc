@@ -97,7 +97,8 @@ bool ConicalGradientContents::Render(const ContentContext& renderer,
   if (renderer.GetDeviceCapabilities().SupportsSSBO()) {
     return RenderSSBO(renderer, entity, pass);
   }
-  if (colors_.size() <= kMaxUniformGradientStops &&
+  if (!renderer.GetDeviceCapabilities().RequiresTextureGradients() &&
+      colors_.size() <= kMaxUniformGradientStops &&
       stops_.size() <= kMaxUniformGradientStops) {
     return RenderUniform(renderer, entity, pass);
   }

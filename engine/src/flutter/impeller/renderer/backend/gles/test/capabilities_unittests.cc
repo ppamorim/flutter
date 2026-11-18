@@ -167,6 +167,20 @@ TEST(CapabilitiesGLES, MaxShaderCompilerThreadsWithARBExtension) {
   EXPECT_EQ(capabilities->GetMaxShaderCompilerThreads(), 3);
 }
 
+TEST(CapabilitiesGLES, DoesNotRequireTextureGradientsByDefault) {
+  auto mock_gles = MockGLES::Init();
+  auto capabilities = mock_gles->GetProcTable().GetCapabilities();
+  EXPECT_FALSE(capabilities->RequiresTextureGradients());
+}
+
+TEST(CapabilitiesGLES, RequiresTextureGradientsOnLegacySwiftShader) {
+  auto mock_gles = MockGLES::Init(
+      std::nullopt, "OpenGL ES 3.0", kMockResolverGLES,
+      "Android Emulator OpenGL ES Translator (Google SwiftShader)");
+  auto capabilities = mock_gles->GetProcTable().GetCapabilities();
+  EXPECT_TRUE(capabilities->RequiresTextureGradients());
+}
+
 TEST(CapabilitiesGLES, MaxShaderCompilerThreadsReportsImplementationMaximum) {
   // The initial value of the limit, 0xFFFFFFFF, reads back as -1.
   auto mock_gles_impl = std::make_unique<::testing::NiceMock<MockGLESImpl>>();

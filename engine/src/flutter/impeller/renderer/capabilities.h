@@ -186,6 +186,11 @@ class Capabilities {
   /// @brief The minimum alignment of storage buffer value offsets in bytes.
   virtual size_t GetMinimumStorageBufferAlignment() const;
 
+  /// @brief Whether gradients must be drawn with the texture gradient shaders
+  ///        instead of the uniform gradient shaders, to work around a driver
+  ///        bug. False by default.
+  virtual bool RequiresTextureGradients() const;
+
   /// @brief The limits the device places on compute workgroups and
   ///        dispatches. Every limit is zero if the backend does not support
   ///        compute.

@@ -7,12 +7,16 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "flutter/display_list/geometry/dl_path_builder.h"
 #include "flutter/display_list/testing/dl_test_snippets.h"
+#include "flutter/fml/closure.h"
 #include "fml/logging.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "impeller/core/device_buffer.h"
 #include "impeller/core/formats.h"
@@ -2065,6 +2069,111 @@ TEST_P(EntityTest, SweepGradientContentsIsOpaque) {
   contents2.SetColors({Color::CornflowerBlue()});
 
   EXPECT_FALSE(contents2.IsOpaque(matrix));
+}
+
+// https://github.com/flutter/flutter/issues/192736
+TEST_P(EntityTest, GradientsUseTextureShadersWhenRequired) {
+  bool requires_texture_gradients = false;
+  std::shared_ptr<const Capabilities> old_capabilities =
+      GetContext()->GetCapabilities();
+  auto capabilities = std::make_shared<::testing::NiceMock<MockCapabilities>>();
+  // The uniform and texture gradient shaders are only used without SSBOs.
+  ON_CALL(*capabilities, SupportsSSBO())
+      .WillByDefault(::testing::Return(false));
+  ON_CALL(*capabilities, RequiresTextureGradients()).WillByDefault([&]() {
+    return requires_texture_gradients;
+  });
+  FLT_FORWARD(capabilities, old_capabilities, GetDefaultColorFormat);
+  FLT_FORWARD(capabilities, old_capabilities, GetDefaultStencilFormat);
+  FLT_FORWARD(capabilities, old_capabilities, GetDefaultDepthStencilFormat);
+  FLT_FORWARD(capabilities, old_capabilities, GetDefaultGlyphAtlasFormat);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsOffscreenMSAA);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsImplicitResolvingMSAA);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsReadFromResolve);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsCompute);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsTextureToTextureBlits);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsTriangleFan);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsDecalSamplerAddressMode);
+  FLT_FORWARD(capabilities, old_capabilities, SupportsPrimitiveRestart);
+  FLT_FORWARD(capabilities, old_capabilities, Supports32BitPrimitiveIndices);
+  FLT_FORWARD(capabilities, old_capabilities, NeedsPartitionedHostBuffer);
+  FLT_FORWARD(capabilities, old_capabilities, GetMinimumUniformAlignment);
+  FLT_FORWARD(capabilities, old_capabilities,
+              GetMaximumRenderPassAttachmentSize);
+  FLT_FORWARD(capabilities, old_capabilities, GetMaxSamplerAnisotropy);
+  if (!SetCapabilities(capabilities).ok()) {
+    GTEST_SKIP()
+        << "This backend doesn't yet support setting device capabilities.";
+  }
+  // The playground context is shared across tests, so the mocked capabilities
+  // have to be undone however this test exits.
+  fml::ScopedCleanupClosure restore_capabilities([&]() {
+    EXPECT_TRUE(
+        SetCapabilities(std::const_pointer_cast<Capabilities>(old_capabilities))
+            .ok());
+  });
+
+  // A new context, so that it creates the pipelines for devices without SSBOs.
+  ContentContext renderer(GetContext(), nullptr);
+  ASSERT_TRUE(renderer.IsValid());
+
+  auto geometry = Geometry::MakeRect(Rect::MakeLTRB(0, 0, 100, 100));
+  const std::vector<Color> colors = {Color::Red(), Color::Green(),
+                                     Color::Blue()};
+  const std::vector<Scalar> stops = {0.0, 0.5, 1.0};
+
+  LinearGradientContents linear(geometry.get());
+  // A diagonal gradient, which the fast gradient path does not handle.
+  linear.SetEndPoints({0, 0}, {100, 100});
+  RadialGradientContents radial(geometry.get());
+  radial.SetCenterAndRadius({50, 50}, 50);
+  SweepGradientContents sweep(geometry.get());
+  sweep.SetCenterAndAngles({50, 50}, Degrees(0), Degrees(360));
+  ConicalGradientContents conical(geometry.get());
+  conical.SetCenterAndRadius({50, 50}, 50);
+  linear.SetColors(colors);
+  linear.SetStops(stops);
+  radial.SetColors(colors);
+  radial.SetStops(stops);
+  sweep.SetColors(colors);
+  sweep.SetStops(stops);
+  conical.SetColors(colors);
+  conical.SetStops(stops);
+
+  const std::array<std::pair<std::string_view, const Contents*>, 4> gradients =
+      {{
+          {"Linear", &linear},
+          {"Radial", &radial},
+          {"Sweep", &sweep},
+          {"Conical", &conical},
+      }};
+
+  // Returns the label of the pipeline that |contents| draws with.
+  auto pipeline_label = [&](const Contents& contents) -> std::string {
+    RenderTarget target = renderer.GetRenderTargetCache()->CreateOffscreen(
+        *GetContext(), {100, 100}, 1u);
+    MockRenderPass pass(GetContext(), target);
+    Entity entity;
+    if (!contents.Render(renderer, entity, pass) ||
+        pass.GetCommands().empty() || !pass.GetCommands().back().pipeline) {
+      return "";
+    }
+    return std::string(
+        pass.GetCommands().back().pipeline->GetDescriptor().GetLabel());
+  };
+
+  for (bool required : {false, true}) {
+    requires_texture_gradients = required;
+    for (const auto& [name, contents] : gradients) {
+      // For example "LinearGradientFill Pipeline" for the texture shader and
+      // "LinearGradientUniformFill Pipeline" for the uniform shader.
+      std::string expected =
+          std::string(name) +
+          (required ? "GradientFill" : "GradientUniformFill");
+      EXPECT_THAT(pipeline_label(*contents), ::testing::StartsWith(expected))
+          << "required: " << required;
+    }
+  }
 }
 
 TEST_P(EntityTest, TiledTextureContentsIsOpaque) {
