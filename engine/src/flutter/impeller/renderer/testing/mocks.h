@@ -316,6 +316,7 @@ class MockCapabilities : public Capabilities {
   MOCK_METHOD(size_t, GetMinimumUniformAlignment, (), (const override));
   MOCK_METHOD(bool, NeedsPartitionedHostBuffer, (), (const, override));
   MOCK_METHOD(ComputeLimits, GetComputeLimits, (), (const, override));
+  MOCK_METHOD(bool, RequiresTextureGradients, (), (const, override));
 };
 
 class MockCommandQueue : public CommandQueue {

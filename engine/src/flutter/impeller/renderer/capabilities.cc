@@ -15,6 +15,10 @@ size_t Capabilities::GetMinimumStorageBufferAlignment() const {
   return GetMinimumUniformAlignment();
 }
 
+bool Capabilities::RequiresTextureGradients() const {
+  return false;
+}
+
 class StandardCapabilities final : public Capabilities {
  public:
   // |Capabilities|

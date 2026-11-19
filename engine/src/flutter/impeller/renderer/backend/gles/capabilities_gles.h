@@ -195,6 +195,9 @@ class CapabilitiesGLES final
   // |Capabilities|
   ComputeLimits GetComputeLimits() const override;
 
+  // |Capabilities|
+  bool RequiresTextureGradients() const override;
+
  private:
   bool supports_texture_to_texture_blits_ = false;
   bool supports_framebuffer_fetch_ = false;
@@ -206,6 +209,7 @@ class CapabilitiesGLES final
   bool supports_texture_array_ = false;
   bool needs_texture_upload_rebind_ = false;
   bool needs_separate_uniform_buffers_ = false;
+  bool requires_texture_gradients_ = false;
   bool is_angle_ = false;
   bool is_es_ = false;
   bool supports_texture_compression_bc_ = false;

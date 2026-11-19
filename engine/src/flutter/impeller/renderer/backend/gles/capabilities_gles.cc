@@ -227,6 +227,12 @@ CapabilitiesGLES::CapabilitiesGLES(const ProcTableGLES& gl) {
   // uniform data being used.
   // https://github.com/flutter/flutter/issues/192915
   needs_separate_uniform_buffers_ = HasPrefix(desc->GetRenderer(), "SVGA3D");
+  // The Android emulator can crash while its legacy SwiftShader GLES renderer
+  // draws gradients. The uniform gradient shaders are the suspected cause, so
+  // use the texture gradient shaders there.
+  // https://github.com/flutter/flutter/issues/192736
+  requires_texture_gradients_ =
+      desc->GetRenderer().find("Google SwiftShader") != std::string::npos;
 
   // ETC2 and EAC are mandatory in OpenGL ES 3.0. BC and ASTC are gated behind
   // extensions and are not present on most mobile or desktop GLES. The whole BC
@@ -460,6 +466,10 @@ bool CapabilitiesGLES::NeedsPartitionedHostBuffer() const {
 // limits.
 ComputeLimits CapabilitiesGLES::GetComputeLimits() const {
   return {};
+}
+
+bool CapabilitiesGLES::RequiresTextureGradients() const {
+  return requires_texture_gradients_;
 }
 
 }  // namespace impeller
